@@ -102,17 +102,19 @@ jobs:
           repository: burgerslayer7/PokePCFollowers
           ref: 78c80f61e166e67efd92d929207caa92e896e789
           path: pokepc-fallback
-          sparse-checkout: |
-            assets/sprites
-            THIRD_PARTY_NOTICES.md
+          sparse-checkout: assets/sprites
       - name: Bundle pinned PokePC 001-251 fallback
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dramatic_sky_ride/assets/pokepc
-          cp pokepc-fallback/assets/sprites/follower_*.png dramatic_sky_ride/assets/pokepc/
-          test "$(find dramatic_sky_ride/assets/pokepc -name 'follower_*.png' | wc -l)" -eq 251
-          cp pokepc-fallback/THIRD_PARTY_NOTICES.md dramatic_sky_ride/POKEPC_THIRD_PARTY_NOTICES.md
+          for n in $(seq -w 1 251); do
+            src="pokepc-fallback/assets/sprites/follower_${n}.png"
+            test -f "$src"
+            cp "$src" dramatic_sky_ride/assets/pokepc/
+          done
+          test "$(find dramatic_sky_ride/assets/pokepc -maxdepth 1 -type f -name 'follower_[0-9][0-9][0-9].png' | wc -l)" -eq 251
+          git -C pokepc-fallback show 78c80f61e166e67efd92d929207caa92e896e789:THIRD_PARTY_NOTICES.md > dramatic_sky_ride/POKEPC_THIRD_PARTY_NOTICES.md
       - name: Revalidate packaged tree
         run: python tests/clean_contract.py
       - name: Build and verify archive
