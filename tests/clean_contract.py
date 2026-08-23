@@ -107,4 +107,12 @@ for dep in [
     "DRAMALESS_SHAPE", "STADIUM2_OVERWORLD_MODELS", "otf-player-switcher",
 ]:
     assert any(dep in x for x in optional), dep
+
+workflow = (root / ".github/workflows/clean-rewrite.yml").read_text(encoding="utf-8")
+assert "78c80f61e166e67efd92d929207caa92e896e789" in workflow
+assert "pokepc-fallback" in workflow
+assert "follower_[0-9][0-9][0-9]" in workflow
+assert "dramatic_sky_ride/manifest.json" in workflow
+assert "dramatic_sky_ride/main.lua" in workflow
+
 print("clean-contract-ok")
