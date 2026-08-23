@@ -102,6 +102,9 @@ local function downstream(allowed) return allowed end
 yes(collision(downstream,false,{reason="tile"}) == true, "flight crosses terrain")
 yes(collision(downstream,false,{reason="bounds"}) == false, "flight keeps bounds")
 yes(collision(downstream,false,{reason="entity"}) == false, "story safe entity")
+yes(collision(downstream,false,{reason="tile",mover={}}) == false, "flight does not alter npc collision")
+local encounter = assert(hooks["encounter.roll"])
+eq(encounter(function() return {species="PIDGEY"} end,{},{}),nil,"flight suppresses ground encounter")
 local speed = assert(hooks["movement.speed"])(function(v) return v end,16,{})
 eq(speed,13,"flight speed")
 
@@ -111,6 +114,8 @@ assert(hooks["core.update"])(function() end, game, 1/60)
 eq(player.sprite,flightMount,"flight re-applied")
 Runtime.public.stop(game,"test")
 eq(player.sprite,"skin_refresh","latest native visual restored")
+yes(encounter(function() return {species="PIDGEY"} end,{},{}) ~= nil,
+  "ground encounter restored after flight")
 
 surfing = true
 player.sprite = "native_surf"

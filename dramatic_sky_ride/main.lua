@@ -58,7 +58,7 @@ wildSkies.install({
 })
 music.install({ runtime = runtime, compat = compat, settings = settings })
 
-mod.exports.version = "0.3.0-rc.1"
+mod.exports.version = "0.3.0-rc.2"
 mod.exports.apiVersion = 2
 mod.exports.catalog = catalog
 mod.exports.runtime = runtime.public
@@ -78,4 +78,4 @@ mod.exports.registerSpriteSource = sprites.register
 mod.exports.unregisterSpriteSource = sprites.unregister
 mod.exports.resolveMountSprite = sprites.resolve
 
-mod.log:info("Dramatic Sky Ride 0.3.0-rc.1 clean parity runtime loaded")
+mod.log:info("Dramatic Sky Ride 0.3.0-rc.2 clean parity runtime loaded")

@@ -40,9 +40,11 @@ function Compat.isGen2(game) return Compat.generation(game) == 2 end
 function Compat.isSurfing(game)
   local world = Compat.world(game)
   local player = world and world.player
-  if player and player.surfing ~= nil then return player.surfing == true end
-  local state = world and world.playerState
-  return state == "surf" or state == "surf_pika"
+  if Compat.isGen2(game) then
+    local state = world and world.playerState
+    return state == "surf" or state == "surf_pika"
+  end
+  return player and player.surfing == true or false
 end
 
 function Compat.setSurfing(game, enabled, mon)
@@ -63,7 +65,6 @@ function Compat.setSurfing(game, enabled, mon)
     elseif world.playerState == "surf" or world.playerState == "surf_pika" then
       pcall(world.applyPlayerState, world, "normal")
     end
-    player.surfing = enabled
     return true
   end
 

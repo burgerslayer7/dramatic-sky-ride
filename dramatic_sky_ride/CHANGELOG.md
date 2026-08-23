@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0-rc.2
+
+- Restricts Flight collision overrides to the player so NPC movement stays native.
+- Suppresses ground encounter rolls, step events, automatic warps and trainer sight while airborne in both generations.
+- Adds Gen 2 connection discovery/story guards and defers scene scripts until landing.
+- Uses the native Gen 2 player state as the sole Visible Surf authority, preventing stale Surf mounts.
+- Adds a Gen 2 Surf compatibility contract and tests the encounter/NPC collision guards.
+
 ## 0.3.0-rc.1
 
 - Clean rewrite for Gen1Recomp API 2 and shared Gen 1/Gen 2 hooks.

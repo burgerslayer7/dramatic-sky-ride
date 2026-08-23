@@ -6,13 +6,6 @@ local reachedCache = nil
 local overrides = {}
 local lastNoticeAt = -100
 
-local VANILLA = {
-  PALLET_TOWN=true,VIRIDIAN_CITY=true,PEWTER_CITY=true,CERULEAN_CITY=true,
-  VERMILION_CITY=true,LAVENDER_TOWN=true,CELADON_CITY=true,FUCHSIA_CITY=true,
-  SAFFRON_CITY=true,CINNABAR_ISLAND=true,INDIGO_PLATEAU=true,VIRIDIAN_FOREST=true,
-}
-for i=1,25 do VANILLA["ROUTE_"..i]=true end
-
 local function now()
   if love and love.timer and love.timer.getTime then return love.timer.getTime() end
   return os.clock()
@@ -21,7 +14,7 @@ end
 local function gated(mapId)
   if type(mapId) ~= "string" or mapId == "" then return false end
   if overrides[mapId] ~= nil then return overrides[mapId] end
-  return VANILLA[mapId] == true
+  return true
 end
 
 local function reached()
@@ -93,9 +86,99 @@ local function installGen1ConnectionGuard()
   return true
 end
 
+local function installGen2ConnectionGuard()
+  local ok,World=pcall(require,"src.world.gen2.World")
+  if not (ok and World and type(World.tryConnection)=="function") then return false end
+  if World.dramaticSkyRideCleanSafetyGate then return true end
+  local native=World.tryConnection
+  local keys={up="north",down="south",left="west",right="east"}
+  function World:tryConnection(dir,...)
+    local conn=self.map and type(self.map.connection)=="function"
+      and self.map:connection(keys[dir]) or nil
+    local game=compat.game(self.game)
+    local blocked,reason=blocks(game,conn and conn.mapId)
+    if blocked then
+      notice(game,reason)
+      return false
+    end
+    return native(self,dir,...)
+  end
+  World.dramaticSkyRideCleanSafetyGate=true
+  return true
+end
+
+local function installGen1AirSafety()
+  local ok,OW=pcall(require,"src.world.OverworldController")
+  if not (ok and OW) then return false end
+  if OW.dramaticSkyRideCleanAirSafety then return true end
+  if type(OW.checkTrainerSight)=="function" then
+    local native=OW.checkTrainerSight
+    function OW:checkTrainerSight(...)
+      if runtime.public.isFlying() then return end
+      return native(self,...)
+    end
+  end
+  local stepName="onStep".."Complete"
+  if type(OW[stepName])=="function" then
+    local native=OW[stepName]
+    OW[stepName]=function(self,...)
+      if runtime.public.isFlying() then
+        self.boulderTried=nil
+        local p=self.player
+        local entry=self.warpEntryCell
+        if entry and p and (p.cellX ~= entry.x or p.cellY ~= entry.y) then
+          self.warpEntryCell=nil
+        end
+        self.standingOnWarp=false
+        return
+      end
+      return native(self,...)
+    end
+  end
+  OW.dramaticSkyRideCleanAirSafety=true
+  return true
+end
+
+local function installGen2AirSafety()
+  local ok,World=pcall(require,"src.world.gen2.World")
+  if not (ok and World) then return false end
+  if World.dramaticSkyRideCleanAirSafety then return true end
+  local methods={
+    "checkTrainerBattle","checkWarpOnArrive","checkCarpetWhileStanding",
+    "tryCoordScript","countStep","tryWildEncounter",
+  }
+  local function guard(name,native)
+    World[name]=function(self,...)
+      if runtime.public.isFlying() then return false end
+      return native(self,...)
+    end
+  end
+  for _,name in ipairs(methods) do
+    local native=World[name]
+    if type(native)=="function" then
+      guard(name,native)
+    end
+  end
+  if type(World.trySceneScript)=="function" then
+    local native=World.trySceneScript
+    function World:trySceneScript(...)
+      if runtime.public.isFlying() then
+        self.pendingSceneScript=true
+        return false
+      end
+      return native(self,...)
+    end
+  end
+  World.dramaticSkyRideCleanAirSafety=true
+  return true
+end
+
 function Safety.install(deps)
   runtime,compat,settings,progression=deps.runtime,deps.compat,deps.settings,deps.progression
   installGen1ConnectionGuard()
+  installGen2ConnectionGuard()
+  installGen1AirSafety()
+  installGen2AirSafety()
 
   mod.events:on("save.loaded",function() reachedCache=nil end)
   mod.events:on("save.created",function() reachedCache=nil end)

@@ -432,9 +432,16 @@ local function installHooks()
   mod.hooks:wrap("movement.collision", function(nextFn, allowed, ctx)
     local base=nextFn(allowed,ctx)
     if state.mode ~= "flight" or not ctx then return base end
+    local player=Compat.player(nil)
+    if ctx.mover and (not player or ctx.mover ~= player) then return base end
     if ctx.reason == "bounds" then return base end
     if ctx.reason == "entity" and bool("story_safe",true) then return base end
     return true
+  end,900)
+
+  mod.hooks:wrap("encounter.roll", function(nextFn,tables,ctx)
+    if state.mode == "flight" then return nil end
+    return nextFn(tables,ctx)
   end,900)
 
   mod.hooks:wrap("movement.speed", function(nextFn,frames,ctx)
