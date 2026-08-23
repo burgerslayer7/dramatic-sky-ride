@@ -1,39 +1,81 @@
--- Dramatic Sky Ride entry point.
--- Source chunks are line-preserving and concatenated before compilation.
-
 local mod = ...
-local index = mod:read("src/parts.txt")
-if not index then
-  error("DRAMATIC_SKY_RIDE: missing src/parts.txt — reinstall the mod", 0)
+
+local function loadModule(name)
+  local rel = "src/" .. name .. ".lua"
+  local source, readErr = mod:read(rel)
+  assert(source, ("Dramatic Sky Ride: missing %s: %s"):format(rel, tostring(readErr)))
+  local loader = loadstring or load
+  local chunk, compileErr = loader(source, "@" .. mod.path .. "/" .. rel)
+  assert(chunk, ("Dramatic Sky Ride: %s did not compile: %s"):format(rel, tostring(compileErr)))
+  local ok, value = pcall(chunk, mod)
+  assert(ok, ("Dramatic Sky Ride: %s failed: %s"):format(rel, tostring(value)))
+  return value
 end
 
-local source = {}
-local previousEndsWithSemicolon = false
-for filename in index:gmatch("[^\r\n]+") do
-  local relative = "src/" .. filename
-  local text = mod:read(relative)
-  if not text then
-    error(("DRAMATIC_SKY_RIDE: missing %s — reinstall the mod"):format(relative), 0)
-  end
+local catalog = loadModule("catalog")
+local compat = loadModule("compat")
+local settings = loadModule("settings")
+local progression = loadModule("progression")
+local sprites = loadModule("sprites")
+local presentation = loadModule("presentation")
+local runtime = loadModule("runtime")
+local ground = loadModule("ground")
+local safety = loadModule("safety")
+local stadium = loadModule("stadium")
+local interop = loadModule("interop")
+local followers = loadModule("followers")
+local hud = loadModule("hud")
+local wildSkies = loadModule("wild_skies")
+local music = loadModule("music")
 
-  -- Several source chunks intentionally begin with ';(function()' so an IIFE
-  -- cannot accidentally chain onto the previous expression. If the previous
-  -- chunk already ends with ';', however, LuaJIT sees two separators in a row
-  -- and rejects the assembled source. Remove only that redundant boundary
-  -- separator; whitespace/newlines are preserved so compiler line numbers stay
-  -- aligned with the original chunk sources.
-  if previousEndsWithSemicolon and text:match("^%s*;") then
-    text = text:gsub("^(%s*);", "%1", 1)
-  end
+settings.install({ catalog = catalog, compat = compat })
+progression.install({ catalog = catalog, compat = compat, settings = settings })
+presentation.install({ settings = settings, compat = compat, progression = progression })
+runtime.install({
+  catalog = catalog,
+  compat = compat,
+  sprites = sprites,
+  settings = settings,
+  progression = progression,
+  presentation = presentation,
+})
+ground.install({ runtime = runtime, compat = compat, settings = settings })
+safety.install({
+  runtime = runtime,
+  compat = compat,
+  settings = settings,
+  progression = progression,
+})
+stadium.install({ runtime = runtime, compat = compat, presentation = presentation })
+interop.install({ runtime = runtime, compat = compat, settings = settings })
+followers.install({ runtime = runtime, compat = compat, settings = settings })
+hud.install({ runtime = runtime, settings = settings })
+wildSkies.install({
+  runtime = runtime,
+  compat = compat,
+  sprites = sprites,
+  settings = settings,
+})
+music.install({ runtime = runtime, compat = compat, settings = settings })
 
-  source[#source + 1] = text
-  previousEndsWithSemicolon = text:match(";%s*$") ~= nil
-end
+mod.exports.version = "0.3.0-rc.2"
+mod.exports.apiVersion = 2
+mod.exports.catalog = catalog
+mod.exports.runtime = runtime.public
+mod.exports.settings = settings
+mod.exports.progression = progression
+mod.exports.presentation = presentation
+mod.exports.compatibility = {
+  wilds = sprites.wildsStatus,
+  renderers = interop.status,
+  stadium = stadium.status,
+  stadiumSprites = sprites.stadiumStatus,
+  crystal251 = compat.crystalStatus,
+  wildSkies = wildSkies.status,
+  music = music.status,
+}
+mod.exports.registerSpriteSource = sprites.register
+mod.exports.unregisterSpriteSource = sprites.unregister
+mod.exports.resolveMountSprite = sprites.resolve
 
-local chunk, err = load(table.concat(source, ""),
-                        "@" .. mod.path .. "/src/sky_ride.lua")
-if not chunk then
-  error("DRAMATIC_SKY_RIDE: source did not compile: " .. tostring(err), 0)
-end
-
-return chunk(mod)
+mod.log:info("Dramatic Sky Ride 0.3.0-rc.2 clean parity runtime loaded")

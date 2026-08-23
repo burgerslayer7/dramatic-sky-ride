@@ -1,0 +1,29 @@
+name: Package 0.3.0 RC (manual)
+on:
+  workflow_dispatch:
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bundle pinned PokePC fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit=78c80f61e166e67efd92d929207caa92e896e789
+          git clone --filter=blob:none --no-checkout https://github.com/burgerslayer7/PokePCFollowers.git /tmp/pokepc
+          git -C /tmp/pokepc checkout "$commit" -- assets/sprites THIRD_PARTY_NOTICES.md
+          mkdir -p dramatic_sky_ride/assets/pokepc
+          cp /tmp/pokepc/assets/sprites/follower_*.png dramatic_sky_ride/assets/pokepc/
+          test "$(find dramatic_sky_ride/assets/pokepc -name 'follower_*.png' | wc -l)" -eq 251
+          cp /tmp/pokepc/THIRD_PARTY_NOTICES.md dramatic_sky_ride/POKEPC_THIRD_PARTY_NOTICES.md
+      - name: Validate clean rewrite
+        run: python tests/clean_contract.py
+      - name: Build RC archive
+        run: |
+          zip -qr dramatic-sky-ride-0.3.0-rc.1.zip dramatic_sky_ride
+          unzip -tq dramatic-sky-ride-0.3.0-rc.1.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dramatic-sky-ride-0.3.0-rc.1
+          path: dramatic-sky-ride-0.3.0-rc.1.zip

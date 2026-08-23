@@ -1,0 +1,130 @@
+name: Clean rewrite CI
+on:
+  push:
+    branches: [release/0.3.0-clean-rewrite]
+  pull_request:
+    paths: ['dramatic_sky_ride/**','tests/**']
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Check out current Gen1Recomp
+        uses: actions/checkout@v4
+        with:
+          repository: bryanthaboi/gen1recomp
+          ref: dev
+          path: gen1recomp-upstream
+      - run: python tests/clean_contract.py
+      - name: Lua syntax + runtime contract
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y lua5.1 luajit >/dev/null
+          find dramatic_sky_ride -name '*.lua' -print0 | xargs -0 -n1 luac5.1 -p
+          lua5.1 tests/runtime_contract.lua dramatic_sky_ride/src/runtime.lua
+      - name: Current Gen1Recomp manifest/runtime validation
+        run: python gen1recomp-upstream/tools/modkit.py validate dramatic_sky_ride
+      - name: Current Gen1Recomp Gen2 compatibility audit
+        run: python gen1recomp-upstream/tools/modkit.py gen2check dramatic_sky_ride --notes
+
+  compatibility-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Check out Wilds of Kanto
+        uses: actions/checkout@v4
+        with:
+          repository: YoDrehDenSwagAuf/overworld-spawn-mod
+          ref: main
+          path: compat/wilds
+      - name: Check out Gen2-3D-Sprites
+        uses: actions/checkout@v4
+        with:
+          repository: randyadr/Gen2-3D-Sprites
+          ref: main
+          path: compat/stadium2
+      - name: Check out Crystal 251
+        uses: actions/checkout@v4
+        with:
+          repository: Deftones565/gen1recomp-mod-crystal-251
+          ref: main
+          path: compat/crystal251
+      - name: Check out Wild Skies source
+        uses: actions/checkout@v4
+        with:
+          repository: shanehudson-gen1recomp-mods/monorepo
+          ref: main
+          path: compat/shane
+      - name: Verify public contracts used by DSR
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          root = Path('compat')
+          wilds = json.loads((root/'wilds/manifest.json').read_text())
+          assert wilds['id'] == 'overworld_wild_spawns'
+          assert 'gen1' in wilds.get('games', []) and 'gen2' in wilds.get('games', [])
+          assert 'mod.exports.resolveFollowerSprite' in (root/'wilds/main.lua').read_text()
+
+          stadium = json.loads((root/'stadium2/manifest.json').read_text())
+          assert stadium['id'] == 'STADIUM2_OVERWORLD_MODELS'
+
+          crystal = json.loads((root/'crystal251/manifest.json').read_text())
+          assert crystal['id'] == 'CRYSTAL_251'
+          version = tuple(int(x) for x in crystal['version'].split('-')[0].split('.')[:3])
+          assert version >= (0, 11, 5)
+
+          skies = json.loads((root/'shane/wild_skies/manifest.json').read_text())
+          assert skies['id'] == 'wild_skies'
+          skies_main = (root/'shane/wild_skies/main.lua').read_text()
+          assert 'mod.exports.registerSpriteSource' in skies_main
+          assert 'mod.exports.unregisterSpriteSource' in skies_main
+
+          dsr = Path('dramatic_sky_ride/src/sprites.lua').read_text()
+          assert 'resolveFollowerSprite' in dsr
+          assert 'STADIUM2_OVERWORLD_MODELS' in dsr
+          print('optional-mod-public-contracts-ok')
+          PY
+
+  package-rc:
+    needs: [contract, compatibility-contracts]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out pinned PokePC fallback
+        uses: actions/checkout@v4
+        with:
+          repository: burgerslayer7/PokePCFollowers
+          ref: 78c80f61e166e67efd92d929207caa92e896e789
+          path: pokepc-fallback
+          sparse-checkout: assets/sprites
+      - name: Bundle pinned PokePC 001-251 fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dramatic_sky_ride/assets/pokepc
+          for n in $(seq -w 1 251); do
+            src="pokepc-fallback/assets/sprites/follower_${n}.png"
+            test -f "$src"
+            cp "$src" dramatic_sky_ride/assets/pokepc/
+          done
+          test "$(find dramatic_sky_ride/assets/pokepc -maxdepth 1 -type f -name 'follower_[0-9][0-9][0-9].png' | wc -l)" -eq 251
+          git -C pokepc-fallback show 78c80f61e166e67efd92d929207caa92e896e789:THIRD_PARTY_NOTICES.md > dramatic_sky_ride/POKEPC_THIRD_PARTY_NOTICES.md
+      - name: Revalidate packaged tree
+        run: python tests/clean_contract.py
+      - name: Build and verify archive
+        run: |
+          zip -qr dramatic-sky-ride-0.3.0-rc.1.zip dramatic_sky_ride
+          unzip -tq dramatic-sky-ride-0.3.0-rc.1.zip
+          test "$(unzip -Z1 dramatic-sky-ride-0.3.0-rc.1.zip | grep -c '^dramatic_sky_ride/assets/pokepc/follower_[0-9][0-9][0-9]\.png$')" -eq 251
+          unzip -Z1 dramatic-sky-ride-0.3.0-rc.1.zip | grep -qx 'dramatic_sky_ride/manifest.json'
+          unzip -Z1 dramatic-sky-ride-0.3.0-rc.1.zip | grep -qx 'dramatic_sky_ride/main.lua'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dramatic-sky-ride-0.3.0-rc.1
+          path: dramatic-sky-ride-0.3.0-rc.1.zip
